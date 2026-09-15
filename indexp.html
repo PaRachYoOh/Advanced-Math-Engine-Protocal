@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Advanced Math Engine</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <!-- Pyodide (v0.26.0 for modern package compatibility) -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.0/full/pyodide.js"></script>
+    
+    <!-- MathLive -->
+    <script src="https://unpkg.com/mathlive@0.98.6/dist/mathlive.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* MathLive custom styling */
+        math-field {
+            font-size: 1.5rem;
+            width: 100%;
+            background-color: transparent;
+            padding: 10px;
+            border-radius: 0.5rem;
+        }
+        math-field:focus { outline: none; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Keyboard Animations */
+        .kb-key:active { transform: scale(0.92); transition: transform 0.05s; }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-indigo-600 text-white shadow-md z-10 flex flex-wrap justify-between items-center px-4 py-3 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="text-2xl">🧮</div>
+            <h1 class="text-xl font-bold tracking-tight">Advanced Math Engine</h1>
+        </div>
+        <div class="flex items-center gap-3 mt-2 sm:mt-0">
+            <button onclick="toggleHistoryModal()" class="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-400 px-3 py-1.5 rounded-lg text-sm transition-colors shadow-sm">
+                <span>🕒</span> ประวัติการใช้งาน
+            </button>
+            <div id="status-badge" class="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full text-sm font-medium">
+                <div class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" id="status-dot"></div>
+                <span id="status-text">กำลังโหลด Python...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="bg-white border-b border-gray-200 overflow-x-auto whitespace-nowrap shadow-sm z-10 shrink-0">
+        <div class="flex px-2 w-full max-w-7xl mx-auto" id="tab-container">
+            <button onclick="switchTab('solver')" class="tab-btn px-5 py-4 text-sm font-semibold border-b-2 border-indigo-600 text-indigo-600 transition-colors">1. แก้สมการ (Solver)</button>
+            <button onclick="switchTab('dynamics')" class="tab-btn px-5 py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors">2. แบบจำลอง (Applied Math)</button>
+            <button onclick="switchTab('fit')" class="tab-btn px-5 py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors">3. สถิติ & ฟิตติ้ง (Data Fit)</button>
+            <button onclick="switchTab('opt')" class="tab-btn px-5 py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors">4. หาจุดคุ้มทุน (Optimization)</button>
+            <button onclick="switchTab('vector')" class="tab-btn px-5 py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 transition-colors">5. สนามเวกเตอร์ (Vector Field)</button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 relative pb-40">
+        <div class="max-w-7xl mx-auto w-full">
+            
+            <!-- Tab 1: Solver -->
+            <div id="tab-solver" class="tab-content block">
+                <!-- Guide -->
+                <div class="bg-blue-50 p-5 rounded-xl border border-blue-100 mb-6 flex flex-col md:flex-row gap-4 text-sm text-blue-900 shadow-sm">
+                    <div class="text-4xl">📘</div>
+                    <div>
+                        <h4 class="font-bold text-lg mb-2 text-blue-800">คำแนะนำในการใช้งาน (How to Use)</h4>
+                        <ul class="list-disc pl-5 space-y-1 mb-2 text-blue-700">
+                            <li><strong>คำนวณตัวเลขเพียวๆ:</strong> พิมพ์ตัวเลขหรือสัญลักษณ์ เช่น <code>\sqrt[3]{94}</code> หรือ <code>5^2 \times 4</code> แล้วกดคำนวณ</li>
+                            <li><strong>แก้สมการหาตัวแปร:</strong> พิมพ์สมการที่มีตัวแปร เช่น <code>x^2 - 4 = 0</code> ระบบจะหาค่า $x$ ให้โดยอัตโนมัติ</li>
+                            <li><strong>ตรวจสอบสมการ:</strong> พิมพ์สมการเพื่อพิสูจน์ เช่น <code>2+2 = 5</code> ระบบจะตอบว่าเป็นจริงหรือเท็จ</li>
+                        </ul>
+                        <p class="text-xs text-blue-600 bg-blue-100/50 inline-block px-2 py-1 rounded mt-1">💡 ทริค: กดปุ่ม "⌨️ แป้นพิมพ์" ในช่องสมการเพื่อเปิดคีย์บอร์ดสัญลักษณ์ และหากมีช่องว่าง <code>\square</code> ต้องเติมตัวเลขให้ครบก่อนคำนวณนะครับ</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+                    <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                        <h2 class="font-bold text-gray-700 flex items-center gap-2">กระดานสมการ (Equation Workspace)</h2>
+                        <button onclick="clearEquation()" class="text-sm bg-rose-50 text-rose-600 px-3 py-1.5 rounded-lg hover:bg-rose-100 font-medium transition-colors">🧹 ล้างสมการ</button>
+                    </div>
+                    <div class="p-4 md:p-6 space-y-6">
+                        <!-- Equation Input -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">1. ป้อนสมการ (Equation)</label>
+                            <div class="border-2 border-indigo-100 rounded-xl focus-within:border-indigo-400 focus-within:shadow-[0_0_0_4px_rgba(99,102,241,0.1)] transition-all bg-white flex items-center pr-2 relative" onclick="openKeyboard('eq')">
+                                <math-field id="math-input" class="flex-1 min-h-[60px] cursor-text" virtual-keyboard-mode="manual" onfocus="activeInputId = 'math-input'"></math-field>
+                                <button onclick="openKeyboard('eq'); event.stopPropagation();" class="bg-indigo-50 text-indigo-600 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 flex items-center gap-1 shadow-sm border border-indigo-200 whitespace-nowrap ml-2">
+                                    ⌨️ แป้นพิมพ์
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Solve For Input -->
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <label class="block text-sm font-medium text-gray-600">2. ต้องการหาค่าตัวแปรใด? (Solve for...)</label>
+                            </div>
+                            <div class="border-2 border-gray-200 rounded-xl focus-within:border-indigo-400 focus-within:shadow-[0_0_0_4px_rgba(99,102,241,0.1)] transition-all bg-white flex items-center pr-2 relative" onclick="openKeyboard('var')">
+                                <math-field id="var-input" class="flex-1 min-h-[50px] cursor-text text-lg" virtual-keyboard-mode="manual" onfocus="activeInputId = 'var-input'"></math-field>
+                                <button onclick="openKeyboard('var'); event.stopPropagation();" class="bg-gray-100 text-gray-600 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-gray-200 flex items-center gap-1 shadow-sm border border-gray-300 whitespace-nowrap ml-2">
+                                    ⌨️ แป้นพิมพ์
+                                </button>
+                            </div>
+                            <div class="bg-gray-50 border border-gray-100 p-3 rounded-lg mt-2 flex items-start gap-2">
+                                <span class="text-amber-500">💡</span>
+                                <div class="text-xs text-gray-500">
+                                    <strong>คำแนะนำตัวแปร (Variables):</strong><br>
+                                    ปล่อยว่างไว้ได้เลย! ระบบจะค้นหาตัวแปรภาษาอังกฤษหรือกรีกในสมการของคุณ (เช่น x, y, θ, α) และแก้หาคำตอบให้โดยอัตโนมัติ หากมีหลายตัวแปร ระบบจะพยายามหาคำตอบของตัวแปรที่พบเป็นตัวแรก
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onclick="calculateEquation()" class="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-4 rounded-xl shadow-md transition-all active:scale-[0.99] flex justify-center items-center gap-2 text-lg">
+                            ⚡ คำนวณ (Calculate)
+                        </button>
+                    </div>
+                </div>
+
+                <div id="result-container" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hidden animate-[fadeIn_0.3s_ease-out]">
+                    <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">ผลลัพธ์ (Solution)</h3>
+                    <div id="result-content" class="text-xl md:text-2xl text-gray-800 overflow-x-auto pb-2 flex flex-col gap-4"></div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Dynamics -->
+            <div id="tab-dynamics" class="tab-content hidden">
+                <div class="bg-blue-50 p-5 rounded-xl border border-blue-100 mb-6 flex flex-col md:flex-row gap-4 text-sm text-blue-900 shadow-sm">
+                    <div class="text-4xl">🔬</div>
+                    <div>
+                        <h4 class="font-bold text-lg mb-2 text-blue-800">การสร้างแบบจำลองทางคณิตศาสตร์ (Applied Math)</h4>
+                        <p class="mb-2 text-blue-700">ใช้สมการเชิงอนุพันธ์ (Differential Equations) เพื่อจำลองปรากฏการณ์ที่มีการเปลี่ยนแปลงตลอดเวลา</p>
+                        <ul class="list-disc pl-5 space-y-1 mb-2 text-blue-700">
+                            <li><strong>Lotka-Volterra:</strong> สังเกตการเพิ่มลดของ "เหยื่อและผู้ล่า" ตามธรรมชาติ</li>
+                            <li><strong>Lorenz Attractor:</strong> ทฤษฎีความโกลาหล (ผีเสื้อขยับปีก) ลองซูมและหมุนกราฟ 3 มิติดูสิ!</li>
+                            <li><strong>Pendulum:</strong> การแกว่งของลูกตุ้มที่มีแรงต้านอากาศ</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 space-y-4">
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                            <label class="block text-sm font-bold text-gray-700 mb-3">เลือกโมเดล (Select Model)</label>
+                            <select id="dyn-model" onchange="loadDynPreset()" class="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium">
+                                <option value="lotka">Lotka-Volterra (เหยื่อ-ผู้ล่า)</option>
+                                <option value="lorenz">Lorenz Attractor (ระบบโกลาหล)</option>
+                                <option value="pendulum">Damped Pendulum (ลูกตุ้ม)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                            <h3 class="font-bold text-gray-700 mb-4 border-b pb-2 flex justify-between items-center">
+                                พารามิเตอร์ (Parameters)
+                                <button onclick="runDynamics()" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold">รีเฟรช 🔁</button>
+                            </h3>
+                            <div id="dyn-params" class="space-y-4"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 h-[350px]">
+                            <div id="dyn-ts-plot" class="w-full h-full"></div>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 h-[400px]">
+                            <div id="dyn-phase-plot" class="w-full h-full"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Data Fit -->
+            <div id="tab-fit" class="tab-content hidden">
+                <div class="bg-blue-50 p-5 rounded-xl border border-blue-100 mb-6 flex flex-col md:flex-row gap-4 text-sm text-blue-900 shadow-sm">
+                    <div class="text-4xl">📈</div>
+                    <div>
+                        <h4 class="font-bold text-lg mb-2 text-blue-800">วิเคราะห์ข้อมูลสถิติ (Data Fitting)</h4>
+                        <p class="mb-2 text-blue-700">มีจุดข้อมูลในมือ แต่ไม่รู้ว่ามันคือสมการอะไร? เครื่องมือนี้ช่วย <strong>"เดาสมการ"</strong> ที่อธิบายแนวโน้มข้อมูลของคุณได้แม่นยำที่สุด</p>
+                        <ul class="list-disc pl-5 space-y-1 mb-2 text-blue-700">
+                            <li>สามารถเลือกสมการที่คิดว่าหน้าตาคล้ายรูปทรงข้อมูลที่สุด เช่น เส้นตรง โค้งพาราโบลา</li>
+                            <li>หากเป็นข้อมูลซับซ้อน เลือก <span class="font-bold">Custom</span> แล้วพิมพ์สูตรเองได้ เช่น <code>a*sin(b*x)+c</code></li>
+                            <li>เช็คคะแนน <span class="font-bold">R² Score</span> (ยิ่งใกล้ 1 ยิ่งแม่น) และกราฟ Residual ประเมินความคลาดเคลื่อน</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 space-y-4">
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                            <div class="flex justify-between items-center mb-3">
+                                <label class="block text-sm font-bold text-gray-700">จุดข้อมูล (X, Y)</label>
+                                <select id="fit-preset" onchange="loadFitPreset()" class="text-xs border rounded p-1 bg-gray-50">
+                                    <option value="">โหลดข้อมูลตัวอย่าง...</option>
+                                    <option value="exp">เติบโตแบบ Exponential</option>
+                                    <option value="osc">การสั่น (Oscillation)</option>
+                                    <option value="poly">แนวโน้มเส้นโค้งพาราโบลา</option>
+                                </select>
+                            </div>
+                            <textarea id="fit-data" class="w-full h-40 border border-gray-300 rounded-lg p-3 font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="1, 2.5&#10;2, 4.1&#10;3, 8.2..."></textarea>
+                            <p class="text-xs text-gray-500 mt-2">บรรทัดละ 1 จุด คั่นด้วยลูกน้ำ</p>
+                        </div>
+                        
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                            <label class="block text-sm font-bold text-gray-700 mb-3">เลือกโมเดล (Model)</label>
+                            <select id="fit-model" onchange="toggleFitCustom()" class="w-full border border-gray-300 rounded-lg p-3 mb-3 bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                                <option value="linear">เส้นตรง (Linear: ax + b)</option>
+                                <option value="poly2">พาราโบลา (Quadratic: ax² + bx + c)</option>
+                                <option value="exp">เอ็กซ์โพเนนเชียล (Exponential: a*e^(bx))</option>
+                                <option value="power">พาวเวอร์ (Power: a*x^b)</option>
+                                <option value="custom">กำหนดสมการเอง (Custom)</option>
+                            </select>
+                            <input type="text" id="fit-custom-eq" class="w-full border border-gray-300 rounded-lg p-3 font-mono text-sm hidden mb-3" placeholder="เช่น a*sin(b*x) + c">
+                            
+                            <button onclick="runFitting()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow transition-colors">วิเคราะห์ข้อมูล (Fit Data)</button>
+                        </div>
+                    </div>
+                    
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 h-[400px]">
+                            <div id="fit-main-plot" class="w-full h-full"></div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                                <h3 class="font-bold text-gray-700 border-b pb-2 mb-3">ผลลัพธ์ทางสถิติ</h3>
+                                <div id="fit-stats" class="text-sm space-y-2 text-gray-600">กดวิเคราะห์ข้อมูลเพื่อดูผลลัพธ์</div>
+                            </div>
+                            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 h-[200px]">
+                                <div id="fit-res-plot" class="w-full h-full"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Optimization -->
+            <div id="tab-opt" class="tab-content hidden">
+                <div class="bg-blue-50 p-5 rounded-xl border border-blue-100 mb-6 flex flex-col md:flex-row gap-4 text-sm text-blue-900 shadow-sm">
+                    <div class="text-4xl">🎯</div>
+                    <div>
+                        <h4 class="font-bold text-lg mb-2 text-blue-800">หาความคุ้มค่าที่สุดทางธุรกิจ (Optimization)</h4>
+                        <p class="mb-2 text-blue-700">เครื่องมือสำหรับธุรกิจหรือวิศวกรที่ต้องการจัดสรรทรัพยากรที่มีอยู่จำกัด ให้ได้ความคุ้มค่ากลับมาสูงสุด!</p>
+                        <ul class="list-disc pl-5 space-y-1 mb-2 text-blue-700">
+                            <li>เลือกตัวอย่างโจทย์ เช่น วางแผนผลิตสินค้า (เพื่อกำไรสูงสุด) หรือ ควบคุมต้นทุนอาหาร (เพื่อราคาต่ำสุด)</li>
+                            <li>พื้นที่แรเงาในกราฟคือ "ทางเลือกที่เป็นไปได้ทั้งหมด (Feasible Region)"</li>
+                            <li>ส่วน ⭐ <strong>ดาวสีทอง</strong> คือจุดที่เหมาะสมและคุ้มค่าที่สุดในเงื่อนไขของคุณ</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 space-y-4">
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="font-bold text-gray-700">ตั้งค่าโจทย์ปัญหา</h3>
+                                <select onchange="loadOptPreset(this.value)" class="text-xs border rounded p-1 bg-gray-50">
+                                    <option value="">โจทย์ตัวอย่าง...</option>
+                                    <option value="profit">วางแผนผลิต (Maximize)</option>
+                                    <option value="diet">ควบคุมต้นทุน (Minimize)</option>
+                                </select>
+                            </div>
+                            
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">เป้าหมาย (Objective Z)</label>
+                            <div class="flex gap-2 mb-4">
+                                <select id="opt-type" class="border border-gray-300 rounded-lg p-2 bg-gray-50 text-sm">
+                                    <option value="max">Maximize (สูงสุด)</option>
+                                    <option value="min">Minimize (ต่ำสุด)</option>
+                                </select>
+                                <input type="text" id="opt-obj" class="flex-1 border border-gray-300 rounded-lg p-2 font-mono text-sm bg-gray-50" placeholder="c1, c2 (เช่น 40, 30)">
+                            </div>
+                            
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 flex justify-between">
+                                ข้อจำกัด (Constraints: a1*x1 + a2*x2 <= b)
+                            </label>
+                            <div id="opt-constraints-container" class="space-y-2 mb-4">
+                                <!-- Constraints injected here -->
+                            </div>
+                            <button onclick="addOptConstraint()" class="text-xs text-indigo-600 bg-indigo-50 px-3 py-1 rounded border border-indigo-100 hover:bg-indigo-100 mb-4">+ เพิ่มข้อจำกัด</button>
+                            
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">ขอบเขตตัวแปร (Bounds)</label>
+                            <div class="flex gap-2 mb-4">
+                                <input type="text" id="opt-b1" class="w-1/2 border border-gray-300 rounded-lg p-2 font-mono text-xs bg-gray-50" placeholder="x1 min,max (0, None)">
+                                <input type="text" id="opt-b2" class="w-1/2 border border-gray-300 rounded-lg p-2 font-mono text-xs bg-gray-50" placeholder="x2 min,max (0, None)">
+                            </div>
+                            
+                            <button onclick="runOptimization()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow transition-colors">ค้นหาจุดที่คุ้มค่าที่สุด</button>
+                        </div>
+                    </div>
+                    
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 h-[450px]">
+                            <div id="opt-plot" class="w-full h-full"></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                            <h3 class="font-bold text-gray-700 border-b pb-2 mb-3">สรุปผลลัพธ์ (Solution)</h3>
+                            <div id="opt-result" class="text-sm md:text-base font-medium space-y-2 text-gray-800">กดค้นหาเพื่อดูคำตอบ</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 5: Vector Field -->
+            <div id="tab-vector" class="tab-content hidden">
+                <div class="bg-blue-50 p-5 rounded-xl border border-blue-100 mb-6 flex flex-col md:flex-row gap-4 text-sm text-blue-900 shadow-sm">
+                    <div class="text-4xl">🌪️</div>
+                    <div>
+                        <h4 class="font-bold text-lg mb-2 text-blue-800">สร้างมโนภาพสนามเวกเตอร์ (Vector Field & Calculus)</h4>
+                        <p class="mb-2 text-blue-700">เปลี่ยนคณิตศาสตร์ขั้นสูงให้เป็นภาพที่จับต้องได้ ใช้ศึกษาการไหลของน้ำ อากาศ หรือสนามแม่เหล็กไฟฟ้า</p>
+                        <ul class="list-disc pl-5 space-y-1 mb-2 text-blue-700">
+                            <li><strong>โหมด 2D:</strong> สีพื้นหลังแบบ Heatmap จะบอกถึงความแรงของการหมุน (Curl) หรือการกระจายตัว (Divergence)</li>
+                            <li><strong>โหมด 3D:</strong> จำลองสนามแม่เหล็กรอบสายไฟ หรือเกลียวพายุ 3 มิติ ใช้เมาส์ <strong>คลิกลากเพื่อหมุน ซูม</strong> ทะลุเข้าใจกลางพายุได้เลย!</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <div class="lg:col-span-1 space-y-4">
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">มิติ (Dimension)</label>
+                            <select id="vec-dim" onchange="updateVectorPresets(); loadVectorPreset();" class="w-full border border-gray-300 rounded-lg p-2 mb-4 bg-gray-50 text-sm">
+                                <option value="2d">2 มิติ (2D Planar)</option>
+                                <option value="3d">3 มิติ (3D Spatial)</option>
+                            </select>
+
+                            <label class="block text-sm font-bold text-gray-700 mb-2">สนามกายภาพ (Physical Field)</label>
+                            <select id="vec-preset" onchange="loadVectorPreset()" class="w-full border border-gray-300 rounded-lg p-2 mb-4 bg-gray-50 text-sm">
+                                <!-- Injected dynamically -->
+                            </select>
+                            
+                            <div id="vec-2d-opts" class="mb-4">
+                                <label class="block text-sm font-bold text-gray-700 mb-2">สีพื้นหลัง (Background Heatmap)</label>
+                                <select id="vec-bg" onchange="runVectorField()" class="w-full border border-gray-300 rounded-lg p-2 bg-gray-50 text-sm">
+                                    <option value="none">ไม่มี (None)</option>
+                                    <option value="curl">การหมุนวน (Curl z)</option>
+                                    <option value="div">การกระจายตัว (Divergence)</option>
+                                </select>
+                            </div>
+                            
+                            <label class="block text-sm font-bold text-gray-700 mb-2">ความละเอียด Grid</label>
+                            <input type="range" id="vec-res" min="10" max="30" value="15" class="w-full mb-4" onchange="runVectorField()">
+                            
+                            <button onclick="runVectorField()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow transition-colors">วาดสนาม (Plot Field)</button>
+                        </div>
+                    </div>
+                    
+                    <div class="lg:col-span-3">
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 h-[500px]">
+                            <div id="vec-plot" class="w-full h-full"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex justify-center items-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white w-full max-w-2xl h-[80vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden m-4 transform transition-transform">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">🕒 ประวัติการใช้งาน (Cloud History)</h2>
+                <button onclick="toggleHistoryModal()" class="text-gray-500 hover:bg-gray-200 rounded-lg p-2 transition-colors">❌</button>
+            </div>
+            <div id="history-list" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+                <div class="text-center text-gray-400 mt-10">กำลังโหลดข้อมูล...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Virtual Keyboard Overlay - FIXED FOCUS STEALING BY onmousedown -->
+    <div id="keyboard-overlay" onmousedown="event.preventDefault()" class="fixed bottom-0 left-0 w-full bg-[#f3f4f6] border-t border-gray-300 shadow-[0_-20px_25px_-5px_rgba(0,0,0,0.15)] z-[100] transform translate-y-full transition-transform duration-300 ease-out flex flex-col pb-2 sm:pb-0 max-h-[45vh]">
+        
+        <!-- Keyboard Header & Tabs -->
+        <div class="bg-[#e5e7eb] px-2 sm:px-4 py-2 flex justify-between items-center border-b border-gray-300">
+            <div class="flex gap-2 overflow-x-auto" style="scrollbar-width: none;" id="kb-tabs">
+                <button class="kb-tab-btn active bg-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm whitespace-nowrap text-indigo-700 transition-colors" onclick="switchKbTab('basic', event)">123 พื้นฐาน</button>
+                <button class="kb-tab-btn px-3 py-1.5 rounded-lg text-sm font-bold text-gray-600 hover:bg-white/60 whitespace-nowrap transition-colors" onclick="switchKbTab('alpha', event)">αβℵ อักษร</button>
+                <button class="kb-tab-btn px-3 py-1.5 rounded-lg text-sm font-bold text-gray-600 hover:bg-white/60 whitespace-nowrap transition-colors" onclick="switchKbTab('func', event)">ƒ(x) ฟังก์ชัน</button>
+                <button class="kb-tab-btn px-3 py-1.5 rounded-lg text-sm font-bold text-gray-600 hover:bg-white/60 whitespace-nowrap transition-colors" onclick="switchKbTab('struct', event)">[ ] โครงสร้าง</button>
+                <button class="kb-tab-btn px-3 py-1.5 rounded-lg text-sm font-bold text-gray-600 hover:bg-white/60 whitespace-nowrap transition-colors" onclick="switchKbTab('logic', event)">∀∃ ตรรกศาสตร์</button>
+            </div>
+            <button class="text-rose-700 bg-rose-100 font-bold hover:bg-rose-200 px-3 py-1.5 rounded-lg whitespace-nowrap ml-2 shadow-sm transition-colors active:scale-95 text-sm" onclick="closeKeyboard()">▼ ปิด</button>
+        </div>
+        
+        <!-- Keyboard Panes -->
+        <div class="p-2 sm:p-4 overflow-y-auto bg-[#f3f4f6] flex-1 w-full flex justify-center custom-scroll">
+            
+            <!-- Pane 1: Basic (Numpad 3x3 + Operators) -->
+            <div id="kb-pane-basic" class="kb-pane flex flex-col md:flex-row gap-4 sm:gap-6 w-full max-w-4xl">
+                <!-- Numpad 3x3 -->
+                <div class="grid grid-cols-3 gap-2 w-full md:w-5/12 max-w-[280px] mx-auto md:mx-0 select-none">
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('7')">7</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('8')">8</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('9')">9</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('4')">4</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('5')">5</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('6')">6</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('1')">1</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('2')">2</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('3')">3</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800 col-span-2" onclick="insertMath('0')">0</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-3 text-xl font-bold hover:bg-gray-50 text-gray-800" onclick="insertMath('.')">.</button>
+                </div>
+                <!-- Operators -->
+                <div class="grid grid-cols-6 md:grid-cols-6 gap-2 w-full md:w-7/12 select-none">
+                    <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl text-indigo-700 hover:bg-indigo-100 font-medium" onclick="insertMath('+')">+</button>
+                    <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl text-indigo-700 hover:bg-indigo-100 font-medium" onclick="insertMath('-')">−</button>
+                    <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl text-indigo-700 hover:bg-indigo-100 font-medium" onclick="insertMath('\\times')">×</button>
+                    <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl text-indigo-700 hover:bg-indigo-100 font-medium" onclick="insertMath('\\cdot')">·</button>
+                    <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl text-indigo-700 hover:bg-indigo-100 font-medium" onclick="insertMath('\\div')">÷</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-bold" onclick="insertMath('=')">=</button>
+                    
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif italic" onclick="insertMath('x')">x</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif italic" onclick="insertMath('y')">y</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif italic" onclick="insertMath('z')">z</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif" onclick="insertMath('\\pi')">π</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif" onclick="insertMath('e')">e</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif" onclick="insertMath('%')">%</button>
+
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg hover:bg-gray-50 font-mono font-medium" onclick="insertMath('\\frac{#@}{#?}')">a/b</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif" onclick="insertMath('{#@}^{#?}')">x²</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif" onclick="insertMath('\\sqrt{#?}')">√x</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif" onclick="insertMath('\\sqrt[#?]{#?}')">ⁿ√x</button>
+                    <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl hover:bg-gray-50 font-serif" onclick="insertMath(',')">,</button>
+                    <button class="kb-key bg-rose-50 shadow-sm rounded-lg py-2 text-lg font-bold text-rose-700 hover:bg-rose-100" onclick="insertCmd('performBackspace')">⌫ ลบ</button>
+                </div>
+            </div>
+
+            <!-- Pane 2: Alpha (Greek & Hebrew) -->
+            <div id="kb-pane-alpha" class="kb-pane hidden grid-cols-7 sm:grid-cols-9 md:grid-cols-11 gap-2 w-full max-w-5xl select-none">
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\alpha')">α</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\beta')">β</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\gamma')">γ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\delta')">δ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\epsilon')">ε</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\zeta')">ζ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\eta')">η</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\theta')">θ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\iota')">ι</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\kappa')">κ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\lambda')">λ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\mu')">μ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\nu')">ν</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\xi')">ξ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('o')">ο</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\pi')">π</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\rho')">ρ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\sigma')">σ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\tau')">τ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\upsilon')">υ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\phi')">φ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\chi')">χ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\psi')">ψ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\omega')">ω</button>
+                
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Gamma')">Γ</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Delta')">Δ</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Theta')">Θ</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Lambda')">Λ</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Xi')">Ξ</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Pi')">Π</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Sigma')">Σ</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Phi')">Φ</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Psi')">Ψ</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Omega')">Ω</button>
+                
+                <button class="kb-key bg-amber-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-amber-100 text-amber-700" onclick="insertMath('\\aleph')">ℵ</button>
+                <button class="kb-key bg-amber-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-amber-100 text-amber-700" onclick="insertMath('\\beth')">ב</button>
+                <button class="kb-key bg-amber-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-amber-100 text-amber-700" onclick="insertMath('\\gimel')">ג</button>
+                <button class="kb-key bg-amber-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-amber-100 text-amber-700" onclick="insertMath('\\daleth')">ד</button>
+                
+                <button class="kb-key bg-emerald-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-emerald-100 text-emerald-700" onclick="insertMath('\\hbar')">ℏ</button>
+
+                <button class="kb-key bg-rose-50 shadow-sm rounded-lg py-2 text-lg font-bold text-rose-700 hover:bg-rose-100 col-span-3 sm:col-span-2" onclick="insertCmd('performBackspace')">⌫ ลบ</button>
+            </div>
+
+            <!-- Pane 3: Functions (Calculus, Trig) -->
+            <div id="kb-pane-func" class="kb-pane hidden grid-cols-4 sm:grid-cols-6 md:grid-cols-7 gap-2 w-full max-w-4xl select-none">
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\sin(#?)')">sin</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\cos(#?)')">cos</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\tan(#?)')">tan</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\sec(#?)')">sec</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\csc(#?)')">csc</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\cot(#?)')">cot</button>
+                
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\ln(#?)')">ln</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\log_{#?}(#?)')">log</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('e^{#?}')">eˣ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\arcsin(#?)')">sin⁻¹</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\arccos(#?)')">cos⁻¹</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-gray-50" onclick="insertMath('\\arctan(#?)')">tan⁻¹</button>
+                
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\int #? \\, dx')">∫</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\int_{#?}^{#?} #? \\, dx')">∫ a..b</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\iint #? \\, dA')">∬</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\frac{d}{dx} #?')">d/dx</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\frac{\\partial}{\\partial x} #?')">∂/∂x</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\nabla')">∇</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\partial')">∂</button>
+                
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-lg font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\lim_{x \\to #?} #?')">lim</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\infty')">∞</button>
+                <button class="kb-key bg-rose-50 shadow-sm rounded-lg py-2 text-lg font-bold text-rose-700 hover:bg-rose-100 col-span-2 sm:col-span-3" onclick="insertCmd('performBackspace')">⌫ ลบ</button>
+            </div>
+
+            <!-- Pane 4: Structures -->
+            <div id="kb-pane-struct" class="kb-pane hidden grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-2 w-full max-w-5xl select-none">
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-mono hover:bg-gray-50" onclick="insertMath('\\left( #? \\right)')">(x)</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-mono hover:bg-gray-50" onclick="insertMath('\\left[ #? \\right]')">[x]</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-mono hover:bg-gray-50" onclick="insertMath('\\left\\{ #? \\right\\}')">{x}</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-mono hover:bg-gray-50" onclick="insertMath('\\left| #? \\right|')">|x|</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\hat{#?}')">x̂</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\bar{#?}')">x̄</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-xl font-serif hover:bg-gray-50" onclick="insertMath('\\vec{#?}')">x⃗</button>
+                
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-lg font-mono hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\begin{bmatrix} #? & #? \\\\ #? & #? \\end{bmatrix}')">[ 2x2 ]</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-lg font-mono hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\begin{bmatrix} #? & #? & #? \\\\ #? & #? & #? \\\\ #? & #? & #? \\end{bmatrix}')">[ 3x3 ]</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-lg font-mono hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\begin{pmatrix} #? \\\\ #? \\end{pmatrix}')">( 2x1 )</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-lg font-mono hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\begin{pmatrix} #? \\\\ #? \\\\ #? \\end{pmatrix}')">( 3x1 )</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\sum_{#?}^{#?} #?')">∑</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\prod_{#?}^{#?} #?')">∏</button>
+                
+                <button class="kb-key bg-rose-50 shadow-sm rounded-lg py-2 text-lg font-bold text-rose-700 hover:bg-rose-100 col-span-2 sm:col-span-3" onclick="insertCmd('performBackspace')">⌫ ลบ</button>
+            </div>
+
+            <!-- Pane 5: Logic -->
+            <div id="kb-pane-logic" class="kb-pane hidden grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-2 w-full max-w-5xl select-none">
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\cup')">∪</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\cap')">∩</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\in')">∈</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\notin')">∉</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\subset')">⊂</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\subseteq')">⊆</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\emptyset')">∅</button>
+                
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\mathbb{R}')">ℝ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\mathbb{C}')">ℂ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\mathbb{Z}')">ℤ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\mathbb{N}')">ℕ</button>
+                <button class="kb-key bg-white shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-gray-50" onclick="insertMath('\\mathbb{Q}')">ℚ</button>
+                
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\rightarrow')">→</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\Rightarrow')">⇒</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\iff')">⇔</button>
+                
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\approx')">≈</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\neq')">≠</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\le')">≤</button>
+                <button class="kb-key bg-indigo-50 shadow-sm rounded-lg py-2 text-2xl font-serif hover:bg-indigo-100 text-indigo-700" onclick="insertMath('\\ge')">≥</button>
+                
+                <button class="kb-key bg-rose-50 shadow-sm rounded-lg py-2 text-lg font-bold text-rose-700 hover:bg-rose-100 col-span-3 sm:col-span-2" onclick="insertCmd('performBackspace')">⌫ ลบ</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'advanced-math-engine';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        let db, auth, userId;
+
+        async function initFirebase() {
+            try {
+                if (Object.keys(firebaseConfig).length === 0) return;
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser?.uid;
+                loadHistory();
+                window.saveToCloudHistory = saveToCloudHistory;
+            } catch (error) {
+                console.error("Firebase init failed:", error);
+            }
+        }
+
+        async function saveToCloudHistory(actionType, details) {
+            if (!userId || !db) return;
+            try {
+                const historyRef = collection(db, 'artifacts', appId, 'users', userId, 'history');
+                await addDoc(historyRef, {
+                    type: actionType,
+                    details: details,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) { console.error("Error saving history:", error); }
+        }
+
+        function loadHistory() {
+            if (!userId || !db) return;
+            const historyRef = collection(db, 'artifacts', appId, 'users', userId, 'history');
+            onSnapshot(historyRef, (snapshot) => {
+                const historyData = [];
+                snapshot.forEach(doc => { historyData.push({ id: doc.id, ...doc.data() }); });
+                historyData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                renderHistoryList(historyData);
+            }, (error) => { console.error("Error fetching history:", error); });
+        }
+
+        function renderHistoryList(historyData) {
+            const listEl = document.getElementById('history-list');
+            if (historyData.length === 0) {
+                listEl.innerHTML = '<div class="text-center text-gray-400 mt-10">ยังไม่มีประวัติการใช้งาน ลองคำนวณสมการดูสิ!</div>';
+                return;
+            }
+            let html = '';
+            historyData.forEach(item => {
+                const date = new Date(item.timestamp).toLocaleString('th-TH');
+                let icon = '🧮';
+                if (item.type === 'Dynamics') icon = '🔬';
+                if (item.type === 'Data Fit') icon = '📈';
+                if (item.type === 'Optimization') icon = '🎯';
+                if (item.type === 'Vector') icon = '🌪️';
+                html += `
+                    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex items-start gap-3">
+                        <div class="text-2xl pt-1">${icon}</div>
+                        <div class="flex-1">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-bold text-gray-700 text-sm">${item.type}</span>
+                                <span class="text-xs text-gray-400">${date}</span>
+                            </div>
+                            <div class="text-sm text-gray-600 bg-gray-50 p-2 rounded-lg font-mono whitespace-pre-wrap">${item.details}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            listEl.innerHTML = html;
+        }
+
+        initFirebase();
+    </script>
+
+    <script>
+        // Global State
+        let pyodideReady = false;
+        let pyodide = null;
+        let activeInputId = 'math-input';
+
+        // Tab Management
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-indigo-600', 'text-indigo-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            event.target.classList.remove('border-transparent', 'text-gray-500');
+            event.target.classList.add('border-indigo-600', 'text-indigo-600');
+            closeKeyboard();
+        }
+
+        function toggleHistoryModal() {
+            document.getElementById('history-modal').classList.toggle('hidden');
+        }
+
+        // Keyboard Management
+        function openKeyboard(target) {
+            activeInputId = target === 'eq' ? 'math-input' : 'var-input';
+            const overlay = document.getElementById('keyboard-overlay');
+            overlay.classList.remove('translate-y-full');
+        }
+
+        function closeKeyboard() {
+            document.getElementById('keyboard-overlay').classList.add('translate-y-full');
+        }
+
+        function switchKbTab(tabId, event) {
+            document.querySelectorAll('.kb-pane').forEach(el => {
+                el.classList.add('hidden');
+                el.classList.remove('grid');
+            });
+            const targetPane = document.getElementById('kb-pane-' + tabId);
+            targetPane.classList.remove('hidden');
+            targetPane.classList.add('grid');
+            
+            document.querySelectorAll('.kb-tab-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-white', 'shadow-sm', 'text-indigo-700');
+                btn.classList.add('text-gray-600');
+            });
+            event.target.classList.add('active', 'bg-white', 'shadow-sm', 'text-indigo-700');
+            event.target.classList.remove('text-gray-600');
+        }
+
+        // --- FIXED: INSERT MATH FUNCTION ---
+        function insertMath(latex) {
+            const mf = document.getElementById(activeInputId);
+            if (mf) {
+                // Focus explicitly on the mathfield
+                mf.focus(); 
+                // Insert LaTeX using executeCommand (works across MathLive versions)
+                mf.executeCommand(['insert', latex]);
+            }
+        }
+
+        function insertCmd(command) {
+            const mf = document.getElementById(activeInputId);
+            if (mf) {
+                mf.focus();
+                mf.executeCommand(command);
+            }
+        }
+
+        function clearEquation() {
+            document.getElementById('math-input').value = '';
+            document.getElementById('var-input').value = '';
+            document.getElementById('result-container').classList.add('hidden');
+            document.getElementById('math-input').focus();
+        }
+
+        // Helper: Format Output
+        function formatOutput(resType, data) {
+            if (resType === 'error') {
+                return `<div class="bg-rose-50 text-rose-700 p-4 rounded-xl border border-rose-100 flex gap-3 text-sm">
+                            <span class="text-xl">⚠️</span> 
+                            <div><strong>ข้อผิดพลาด: ระบบไม่เข้าใจสมการนี้</strong><br><span class="text-xs text-rose-500 mt-1 block">รายละเอียด: ${data}<br>คำแนะนำ: ลองตรวจสอบรูปแบบการจัดวางวงเล็บ หรือสัญลักษณ์ที่ซับซ้อนเกินไป</span></div>
+                        </div>`;
+            }
+            if (resType === 'bool') {
+                return data ? 
+                    `<div class="text-emerald-600 font-bold flex items-center gap-2 bg-emerald-50 p-3 rounded-lg"><span class="text-2xl">✅</span> สมการนี้เป็นจริง (True)</div>` : 
+                    `<div class="text-rose-600 font-bold flex items-center gap-2 bg-rose-50 p-3 rounded-lg"><span class="text-2xl">❌</span> สมการนี้เป็นเท็จ (False)</div>`;
+            }
+            if (resType === 'numeric') {
+                return `
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <div class="text-gray-500 text-sm mb-1">ผลลัพธ์แบบแม่นยำ (Exact):</div>
+                        <math-field readonly class="text-2xl text-indigo-700">${data.exact}</math-field>
+                        <div class="text-gray-500 text-sm mt-3 mb-1">ค่าประมาณ (Approx):</div>
+                        <div class="text-xl font-mono text-gray-700 ml-2">≈ ${data.approx}</div>
+                    </div>
+                `;
+            }
+            if (resType === 'solution') {
+                let html = '<div class="space-y-3">';
+                data.forEach(sol => {
+                    html += `<div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100 inline-block w-full overflow-x-auto">
+                                <math-field readonly class="text-xl text-indigo-800">${sol}</math-field>
+                             </div>`;
+                });
+                html += '</div>';
+                return html;
+            }
+            return `<div class="text-gray-500">รูปแบบคำตอบไม่รู้จัก</div>`;
+        }
+
+        // Init Pyodide & Packages (Uses v0.26.0 for full compatibility)
+        async function initPyodide() {
+            try {
+                const statusText = document.getElementById('status-text');
+                statusText.innerText = 'โหลด Python Engine... (1/3)';
+                
+                pyodide = await loadPyodide();
+                
+                statusText.innerText = 'ติดตั้ง SymPy & SciPy... (2/3)';
+                await pyodide.loadPackage(['micropip', 'numpy', 'scipy']);
+                
+                statusText.innerText = 'ติดตั้ง LaTeX Parser... (3/3)';
+                const micropip = pyodide.pyimport("micropip");
+                
+                // Using 4.11.1 because we are on pyodide v0.26.0
+                await micropip.install(['sympy', 'antlr4-python3-runtime==4.11.1']);
+                
+                await pyodide.runPythonAsync(`
+                    import sympy as sp
+                    from sympy.parsing.latex import parse_latex
+                    import numpy as np
+                    from scipy.integrate import solve_ivp
+                    from scipy.optimize import curve_fit, linprog
+                    import json
+                `);
+                
+                pyodideReady = true;
+                statusText.innerText = 'ระบบพร้อมใช้งาน';
+                document.getElementById('status-dot').classList.replace('bg-yellow-400', 'bg-emerald-400');
+                document.getElementById('status-dot').classList.remove('animate-pulse');
+                
+                loadDynPreset();
+                loadFitPreset();
+                loadOptPreset('profit');
+                updateVectorPresets();
+                loadVectorPreset();
+            } catch (err) {
+                console.error(err);
+                document.getElementById('status-text').innerText = 'โหลดล้มเหลว (Refresh เพื่อลองใหม่)';
+                document.getElementById('status-dot').classList.replace('bg-yellow-400', 'bg-red-500');
+            }
+        }
+
+        // Tab 1: Solver Logic
+        async function calculateEquation() {
+            if (!pyodideReady) { alert("กรุณารอระบบโหลด Python สักครู่ครับ"); return; }
+            
+            const eqStr = document.getElementById('math-input').value.trim();
+            const targetVarStr = document.getElementById('var-input').value.trim();
+            const resContainer = document.getElementById('result-container');
+            const resContent = document.getElementById('result-content');
+            
+            if (!eqStr) return;
+            
+            resContainer.classList.remove('hidden');
+            resContent.innerHTML = '<div class="text-center text-gray-500 animate-pulse">กำลังประมวลผลทางคณิตศาสตร์...</div>';
+            closeKeyboard();
+
+            try {
+                if (window.saveToCloudHistory) window.saveToCloudHistory('Solver', `สมการ: ${eqStr}\nหาตัวแปร: ${targetVarStr || 'อัตโนมัติ'}`);
+
+                const pyCode = `
+                    import json
+                    try:
+                        eq_raw = r"""${eqStr}"""
+                        target_raw = r"""${targetVarStr}"""
+                        
+                        if "=" in eq_raw:
+                            lhs_str, rhs_str = eq_raw.split("=", 1)
+                            lhs = parse_latex(lhs_str)
+                            rhs = parse_latex(rhs_str)
+                            eq = sp.Eq(lhs, rhs)
+                        else:
+                            eq = parse_latex(eq_raw)
+                            
+                        symbols = list(eq.free_symbols)
+                        
+                        if len(symbols) == 0:
+                            if isinstance(eq, sp.core.relational.Relational) or eq == True or eq == False:
+                                res = {"type": "bool", "data": bool(eq)}
+                            else:
+                                val = eq.doit()
+                                res = {"type": "numeric", "data": {"exact": sp.latex(val), "approx": str(val.evalf(5))}}
+                        else:
+                            targets = []
+                            if target_raw:
+                                target_parts = target_raw.split(',')
+                                for p in target_parts:
+                                    if p.strip():
+                                        t_sym = parse_latex(p.strip())
+                                        if isinstance(t_sym, sp.Symbol): targets.append(t_sym)
+                                        elif hasattr(t_sym, 'free_symbols') and len(t_sym.free_symbols) == 1: targets.append(list(t_sym.free_symbols)[0])
+                            
+                            if not targets: targets = [symbols[0]]
+                                
+                            solutions = sp.solve(eq, targets, dict=True)
+                            
+                            sol_latex = []
+                            if not solutions:
+                                sol_latex.append("ไม่มีคำตอบ (No Solution)")
+                            else:
+                                for sol_dict in solutions:
+                                    if not sol_dict: continue
+                                    parts = []
+                                    for var, val in sol_dict.items():
+                                        parts.append(f"{sp.latex(var)} = {sp.latex(val)}")
+                                    
+                                    if len(parts) > 1: sol_latex.append(r"\\left\\{ " + ", \\quad ".join(parts) + r" \\right\\}")
+                                    else: sol_latex.append(parts[0])
+                                        
+                            res = {"type": "solution", "data": sol_latex}
+                        json.dumps(res)
+                    except Exception as e:
+                        json.dumps({"type": "error", "data": str(e)})
+                `;
+                
+                const resultJson = await pyodide.runPythonAsync(pyCode);
+                const result = JSON.parse(resultJson);
+                resContent.innerHTML = formatOutput(result.type, result.data);
+            } catch (err) { resContent.innerHTML = formatOutput('error', err.message); }
+        }
+
+        // Tab 2: Dynamics
+        const dynPresets = {
+            lotka: {
+                name: 'Lotka-Volterra (Predator-Prey)',
+                params: [
+                    {id: 'alpha', label: 'อัตราเกิดเหยื่อ (α)', val: 1.1, min: 0.1, max: 2.0, step: 0.1},
+                    {id: 'beta', label: 'อัตราตายเหยื่อจากผู้ล่า (β)', val: 0.4, min: 0.1, max: 1.0, step: 0.1},
+                    {id: 'gamma', label: 'อัตราตายผู้ล่า (γ)', val: 0.4, min: 0.1, max: 1.0, step: 0.1},
+                    {id: 'delta', label: 'อัตราเกิดผู้ล่าเมื่อกินเหยื่อ (δ)', val: 0.1, min: 0.01, max: 0.5, step: 0.01},
+                ],
+                init: [10, 10], time: 50
+            },
+            lorenz: {
+                name: 'Lorenz Attractor',
+                params: [
+                    {id: 'sigma', label: 'Sigma (σ)', val: 10, min: 1, max: 20, step: 1},
+                    {id: 'rho', label: 'Rho (ρ)', val: 28, min: 1, max: 50, step: 1},
+                    {id: 'beta', label: 'Beta (β)', val: 2.667, min: 0.5, max: 5, step: 0.1},
+                ],
+                init: [1, 1, 1], time: 40
+            },
+            pendulum: {
+                name: 'Damped Pendulum',
+                params: [
+                    {id: 'b', label: 'แรงต้านอากาศ (b)', val: 0.25, min: 0, max: 2, step: 0.05},
+                    {id: 'c', label: 'แรงโน้มถ่วง (c = g/L)', val: 5.0, min: 1, max: 10, step: 0.5},
+                ],
+                init: [3.1, 0], time: 20
+            }
+        };
+
+        function loadDynPreset() {
+            const m = document.getElementById('dyn-model').value;
+            const pre = dynPresets[m];
+            const container = document.getElementById('dyn-params');
+            let html = '';
+            pre.params.forEach(p => {
+                html += `<div><div class="flex justify-between text-xs text-gray-500 mb-1"><span>${p.label}</span><span id="val-${p.id}" class="font-mono text-indigo-600 font-bold">${p.val}</span></div><input type="range" id="param-${p.id}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.val}" class="w-full accent-indigo-600" oninput="document.getElementById('val-${p.id}').innerText = this.value; runDynamics();"></div>`;
+            });
+            container.innerHTML = html;
+            runDynamics();
+        }
+
+        async function runDynamics() {
+            if (!pyodideReady) return;
+            const model = document.getElementById('dyn-model').value;
+            const pre = dynPresets[model];
+            const pVals = pre.params.map(p => parseFloat(document.getElementById(`param-${p.id}`).value));
+            
+            if (window.saveToCloudHistory) window.saveToCloudHistory('Dynamics', `Model: ${pre.name}`);
+
+            try {
+                const pyCode = `
+                    def simulate():
+                        model = '${model}'
+                        p = ${JSON.stringify(pVals)}
+                        init = ${JSON.stringify(pre.init)}
+                        t_span = (0, ${pre.time})
+                        t_eval = np.linspace(0, ${pre.time}, 2000)
+                        
+                        if model == 'lotka':
+                            def sys(t, y): return [p[0]*y[0] - p[1]*y[0]*y[1], p[3]*y[0]*y[1] - p[2]*y[1]]
+                            res = solve_ivp(sys, t_span, init, t_eval=t_eval, method='RK45')
+                            return {"t": res.t.tolist(), "y1": res.y[0].tolist(), "y2": res.y[1].tolist(), "is3d": False}
+                        elif model == 'lorenz':
+                            def sys(t, y): return [p[0]*(y[1]-y[0]), y[0]*(p[1]-y[2])-y[1], y[0]*y[1]-p[2]*y[2]]
+                            res = solve_ivp(sys, t_span, init, t_eval=t_eval, method='RK45')
+                            return {"t": res.t.tolist(), "y1": res.y[0].tolist(), "y2": res.y[1].tolist(), "y3": res.y[2].tolist(), "is3d": True}
+                        elif model == 'pendulum':
+                            def sys(t, y): return [y[1], -p[0]*y[1] - p[1]*np.sin(y[0])]
+                            res = solve_ivp(sys, t_span, init, t_eval=t_eval, method='RK45')
+                            return {"t": res.t.tolist(), "y1": res.y[0].tolist(), "y2": res.y[1].tolist(), "is3d": False}
+                    json.dumps(simulate())
+                `;
+                const resJson = await pyodide.runPythonAsync(pyCode);
+                const res = JSON.parse(resJson);
+                
+                const tsData = [
+                    {x: res.t, y: res.y1, name: model==='lotka'?'เหยื่อ': (model==='lorenz'?'X':'มุม'), mode: 'lines', line: {width: 2}},
+                    {x: res.t, y: res.y2, name: model==='lotka'?'ผู้ล่า': (model==='lorenz'?'Y':'ความเร็ว'), mode: 'lines', line: {width: 2}}
+                ];
+                if(res.is3d) tsData.push({x: res.t, y: res.y3, name: 'Z', mode: 'lines', line: {width: 2}});
+                Plotly.newPlot('dyn-ts-plot', tsData, { title: 'กราฟตามเวลา (Time Series)', margin: {t:30, l:40, r:20, b:30}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)' });
+                
+                if (res.is3d) {
+                    const phaseData = [{ x: res.y1, y: res.y2, z: res.y3, type: 'scatter3d', mode: 'lines', line: {color: res.t, colorscale: 'Plasma', width: 3} }];
+                    Plotly.newPlot('dyn-phase-plot', phaseData, { title: 'วงโคจร 3D (Phase Portrait)', margin: {t:30, l:0, r:0, b:0}, paper_bgcolor: 'rgba(0,0,0,0)' });
+                } else {
+                    const phaseData = [{ x: res.y1, y: res.y2, type: 'scatter', mode: 'lines', line: {color: '#6366f1', width: 2} }];
+                    Plotly.newPlot('dyn-phase-plot', phaseData, { title: 'วงโคจร 2D (Phase Portrait)', margin: {t:30, l:40, r:20, b:30}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', xaxis: {title: model==='lotka'?'เหยื่อ':'มุม'}, yaxis: {title: model==='lotka'?'ผู้ล่า':'ความเร็ว'} });
+                }
+            } catch (err) { document.getElementById('dyn-phase-plot').innerHTML = `<div class="text-rose-500 font-bold p-4">⚠️ ระบบเกิดความโกลาหลจนลู่ออกสู่อนันต์ (Divergence) ลองปรับค่าใหม่</div>`; }
+        }
+
+        // Tab 3: Data Fit
+        const fitPresets = {
+            exp: "1, 2.7\n2, 7.3\n3, 20.0\n4, 54.5\n5, 148.4\n6, 403.4",
+            osc: "0, 0.0\n0.5, 0.47\n1, 0.84\n1.5, 0.99\n2, 0.90\n2.5, 0.59\n3, 0.14\n3.5, -0.35\n4, -0.75",
+            poly: "1, 2.1\n2, 3.9\n3, 10.2\n4, 15.8\n5, 26.1\n6, 35.9\n7, 50.2"
+        };
+        
+        function loadFitPreset() {
+            const v = document.getElementById('fit-preset').value;
+            if (v && fitPresets[v]) document.getElementById('fit-data').value = fitPresets[v];
+        }
+
+        function toggleFitCustom() {
+            const m = document.getElementById('fit-model').value;
+            const c = document.getElementById('fit-custom-eq');
+            if (m === 'custom') { c.classList.remove('hidden'); c.classList.add('block'); }
+            else { c.classList.add('hidden'); c.classList.remove('block'); }
+        }
+
+        async function runFitting() {
+            if (!pyodideReady) return;
+            const raw = document.getElementById('fit-data').value;
+            const model = document.getElementById('fit-model').value;
+            const customEq = document.getElementById('fit-custom-eq').value;
+            
+            if (window.saveToCloudHistory) window.saveToCloudHistory('Data Fit', `Model: ${model}`);
+
+            try {
+                const pyCode = `
+                    def do_fit():
+                        data = []
+                        for line in """${raw}""".split('\\n'):
+                            if ',' in line:
+                                try:
+                                    x, y = map(float, line.split(','))
+                                    data.append((x, y))
+                                except: pass
+                        if len(data) < 2: return {"err": "ข้อมูลน้อยเกินไป หรือรูปแบบผิด (ต้องมี X, Y อย่างน้อย 2 จุด)"}
+                        
+                        data = np.array(data)
+                        X, Y = data[:, 0], data[:, 1]
+                        model_type = '${model}'
+                        eq_str = ''
+                        
+                        if model_type == 'linear':
+                            def f(x, a, b): return a*x + b
+                            p0 = [1, 1]; eq_str = "a*x + b"
+                        elif model_type == 'poly2':
+                            def f(x, a, b, c): return a*x**2 + b*x + c
+                            p0 = [1, 1, 1]; eq_str = "a*x^2 + b*x + c"
+                        elif model_type == 'exp':
+                            def f(x, a, b): return a * np.exp(b * x)
+                            p0 = [1, 0.1]; eq_str = "a * e^(b*x)"
+                        elif model_type == 'power':
+                            def f(x, a, b): return a * np.power(x, b)
+                            p0 = [1, 1]; eq_str = "a * x^b"
+                        elif model_type == 'custom':
+                            eq_raw = """${customEq}"""
+                            import sympy as sp
+                            x_sym = sp.Symbol('x')
+                            expr = parse_latex(eq_raw) if '\\\\' in eq_raw else sp.sympify(eq_raw)
+                            params = sorted(list(expr.free_symbols - {x_sym}), key=lambda s: s.name)
+                            if not params: return {"err": "สมการ Custom ต้องมีตัวแปรค่าคงที่ เช่น a, b, c"}
+                            f_lamb = sp.lambdify((x_sym, *params), expr, 'numpy')
+                            def f(x, *args): return f_lamb(x, *args)
+                            p0 = [1] * len(params); eq_str = str(expr)
+                            
+                        try:
+                            popt, pcov = curve_fit(f, X, Y, p0=p0, maxfev=10000)
+                            Y_pred = f(X, *popt)
+                            ss_res = np.sum((Y - Y_pred)**2)
+                            ss_tot = np.sum((Y - np.mean(Y))**2)
+                            r2 = 1 - (ss_res / ss_tot)
+                            rmse = np.sqrt(ss_res / len(Y))
+                            X_curve = np.linspace(min(X), max(X), 100)
+                            Y_curve = f(X_curve, *popt)
+                            return {"X": X.tolist(), "Y": Y.tolist(), "Xc": X_curve.tolist(), "Yc": Y_curve.tolist(), "res": (Y - Y_pred).tolist(), "r2": r2, "rmse": rmse, "eq": eq_str, "popt": popt.tolist()}
+                        except Exception as e: return {"err": "โมเดลไม่ยอมลู่เข้า: " + str(e)}
+                    json.dumps(do_fit())
+                `;
+                const res = JSON.parse(await pyodide.runPythonAsync(pyCode));
+                if (res.err) { document.getElementById('fit-stats').innerHTML = `<div class="text-rose-600 font-bold">⚠️ ${res.err}</div>`; return; }
+                
+                Plotly.newPlot('fit-main-plot', [{x: res.X, y: res.Y, mode: 'markers', name: 'Data', marker: {color: '#64748b', size: 8}}, {x: res.Xc, y: res.Yc, mode: 'lines', name: 'Fit Curve', line: {color: '#ef4444', width: 3}}], { margin: {t:10, l:40, r:20, b:30}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)'});
+                Plotly.newPlot('fit-res-plot', [{x: res.X, y: res.res, type: 'bar', marker: {color: '#818cf8'}}], { title: {text: 'ความคลาดเคลื่อน (Residuals)', font: {size: 12}}, margin: {t:30, l:30, r:10, b:20}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)'});
+                
+                let pStr = ''; const pNames = ['a', 'b', 'c', 'd', 'e'];
+                res.popt.forEach((v, i) => { pStr += `<li>${pNames[i]} = <span class="font-mono text-indigo-700">${v.toFixed(4)}</span></li>`; });
+                document.getElementById('fit-stats').innerHTML = `<div class="mb-2 font-mono text-xs bg-indigo-50 p-2 rounded">y = ${res.eq}</div><div class="grid grid-cols-2 gap-2 text-sm"><div class="bg-gray-50 p-2 rounded border"><strong>R² Score:</strong><br><span class="${res.r2>0.9?'text-emerald-600':'text-amber-600'} font-bold">${res.r2.toFixed(4)}</span></div><div class="bg-gray-50 p-2 rounded border"><strong>RMSE:</strong><br><span class="font-bold">${res.rmse.toFixed(4)}</span></div></div><div class="mt-3 text-xs text-gray-500"><strong>พารามิเตอร์:</strong><ul class="list-disc pl-4 mt-1 space-y-1">${pStr}</ul></div>`;
+            } catch (err) { console.error(err); }
+        }
+
+        // Tab 4: Optimization
+        const optPresets = {
+            profit: { obj: "40, 30", type: "max", constraints: ["1, 2, 40", "2, 1, 50"], b1: "0, None", b2: "0, None" },
+            diet: { obj: "1.5, 2.0", type: "min", constraints: ["1, 1, 15", "0.5, 1, 10"], b1: "0, None", b2: "0, None" }
+        };
+
+        function loadOptPreset(val) {
+            if (!val) return;
+            const pre = optPresets[val];
+            document.getElementById('opt-type').value = pre.type;
+            document.getElementById('opt-obj').value = pre.obj;
+            document.getElementById('opt-b1').value = pre.b1;
+            document.getElementById('opt-b2').value = pre.b2;
+            const cCont = document.getElementById('opt-constraints-container');
+            cCont.innerHTML = '';
+            pre.constraints.forEach(c => addOptConstraint(c));
+        }
+
+        function addOptConstraint(val = "") {
+            const div = document.createElement('div');
+            div.className = "flex gap-2 items-center opt-const-row";
+            div.innerHTML = `<input type="text" class="opt-const-val flex-1 border border-gray-300 rounded-lg p-2 font-mono text-sm bg-gray-50" placeholder="a1, a2, b (เช่น 1, 2, 40)" value="${val}"><button onclick="this.parentElement.remove()" class="text-rose-500 hover:text-rose-700 p-2">✕</button>`;
+            document.getElementById('opt-constraints-container').appendChild(div);
+        }
+
+        async function runOptimization() {
+            if (!pyodideReady) return;
+            const type = document.getElementById('opt-type').value;
+            const obj = document.getElementById('opt-obj').value;
+            const b1 = document.getElementById('opt-b1').value;
+            const b2 = document.getElementById('opt-b2').value;
+            
+            const constraints = [];
+            document.querySelectorAll('.opt-const-val').forEach(el => { if (el.value.trim()) constraints.push(el.value.trim()); });
+            
+            if (window.saveToCloudHistory) window.saveToCloudHistory('Optimization', `Objective: ${type} ${obj}`);
+
+            try {
+                const pyCode = `
+                    def do_opt():
+                        is_max = '${type}' == 'max'
+                        try:
+                            c_raw = [float(x) for x in "${obj}".split(',')]
+                            c = [-x for x in c_raw] if is_max else c_raw
+                        except: return {"err": "Objective ผิดรูปแบบ"}
+                        
+                        A_ub, b_ub = [], []
+                        const_raw = [${constraints.map(c => '"' + c + '"').join(',')}]
+                        for row in const_raw:
+                            if not row: continue
+                            parts = [float(x) for x in row.split(',')]
+                            if len(parts) >= 3:
+                                A_ub.append([parts[0], parts[1]]); b_ub.append(parts[2])
+                        
+                        if not A_ub: return {"err": "ต้องมีข้อจำกัดอย่างน้อย 1 ข้อ"}
+                        
+                        def parse_bound(s):
+                            parts = [p.strip().lower() for p in s.split(',')]
+                            m1 = None if parts[0] == 'none' else float(parts[0])
+                            m2 = None if len(parts)<2 or parts[1] == 'none' else float(parts[1])
+                            return (m1, m2)
+                        
+                        res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=[parse_bound("${b1}"), parse_bound("${b2}")], method='highs')
+                        if not res.success: return {"err": "ไม่พบคำตอบ (Infeasible หรือ Unbounded)"}
+                            
+                        x_arr = np.linspace(0, max(b_ub)*1.5, 400)
+                        lines_y = []
+                        for i in range(len(b_ub)):
+                            a1, a2 = A_ub[i]; b = b_ub[i]
+                            if a2 != 0:
+                                y = (b - a1*x_arr) / a2
+                                y[y < 0] = np.nan
+                                lines_y.append(y.tolist())
+                            else: lines_y.append([])
+                                
+                        return {"success": True, "val": -res.fun if is_max else res.fun, "x": res.x.tolist(), "lines_x": x_arr.tolist(), "lines_y": lines_y}
+                    json.dumps(do_opt())
+                `;
+                const res = JSON.parse(await pyodide.runPythonAsync(pyCode));
+                if (res.err) { document.getElementById('opt-result').innerHTML = `<div class="text-rose-600 font-bold">⚠️ ${res.err}</div>`; return; }
+                
+                const plotData = []; let maxY = 0;
+                res.lines_y.forEach((ly, i) => {
+                    if(ly.length > 0) {
+                        plotData.push({x: res.lines_x, y: ly, mode: 'lines', name: `Constraint ${i+1}`, line: {dash: 'dot'}});
+                        maxY = Math.max(maxY, Math.max(...ly.filter(n => !isNaN(n))));
+                    }
+                });
+                plotData.push({ x: [res.x[0]], y: [res.x[1]], mode: 'markers', name: 'Optimal Point ⭐', marker: {size: 16, color: '#fbbf24', symbol: 'star', line: {color: '#b45309', width: 2}} });
+                
+                Plotly.newPlot('opt-plot', plotData, { title: 'กราฟพื้นที่ความเป็นไปได้ (Feasible Region)', xaxis: {title: 'X1', range: [0, res.x[0]*2]}, yaxis: {title: 'X2', range: [0, Math.max(res.x[1]*2, maxY*1.2)]}, margin: {t:40, l:40, r:20, b:40}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0.02)' });
+                document.getElementById('opt-result').innerHTML = `<div class="bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-200"><div class="text-lg font-bold mb-2">⭐ จุดที่ดีที่สุด (Optimal Solution):</div><ul class="list-disc pl-5 mb-2"><li>X1 = <span class="font-mono bg-white px-2 py-0.5 rounded">${res.x[0].toFixed(2)}</span></li><li>X2 = <span class="font-mono bg-white px-2 py-0.5 rounded">${res.x[1].toFixed(2)}</span></li></ul><div class="mt-3 pt-3 border-t border-emerald-200">ค่า <strong>Z</strong> ${type==='max'?'สูงสุด':'ต่ำสุด'} = <span class="text-xl font-bold font-mono">${res.val.toFixed(2)}</span></div></div>`;
+            } catch (err) { console.error(err); }
+        }
+
+        // Tab 5: Vector Field
+        const vecPresets2D = [
+            {val: 'vortex', label: 'Vortex (หมุนวน)'},
+            {val: 'source', label: 'Source (น้ำพุ)'},
+            {val: 'saddle', label: 'Saddle (จุดอานม้า)'},
+            {val: 'dipole', label: 'Dipole (ขั้วแม่เหล็ก)'}
+        ];
+        const vecPresets3D = [
+            {val: 'helix', label: 'Helical Flow (เกลียวพายุ)'},
+            {val: 'wire', label: 'Magnetic Wire (รอบสายไฟ)'},
+            {val: 'grad', label: '3D Gradient'}
+        ];
+
+        function updateVectorPresets() {
+            const dim = document.getElementById('vec-dim').value;
+            const sel = document.getElementById('vec-preset');
+            const opts2D = document.getElementById('vec-2d-opts');
+            sel.innerHTML = '';
+            (dim === '2d' ? vecPresets2D : vecPresets3D).forEach(p => { sel.appendChild(new Option(p.label, p.val)); });
+            if(dim === '2d') { opts2D.classList.remove('hidden'); opts2D.classList.add('block'); }
+            else { opts2D.classList.add('hidden'); opts2D.classList.remove('block'); }
+        }
+
+        function loadVectorPreset() { runVectorField(); }
+
+        async function runVectorField() {
+            if (!pyodideReady) return;
+            const dim = document.getElementById('vec-dim').value;
+            const preset = document.getElementById('vec-preset').value;
+            const bg = document.getElementById('vec-bg').value;
+            const resVal = document.getElementById('vec-res').value;
+            
+            if (window.saveToCloudHistory) window.saveToCloudHistory('Vector Field', `Dim: ${dim}, Preset: ${preset}`);
+
+            try {
+                const pyCode = `
+                    def do_vec():
+                        dim, preset, bg, res = '${dim}', '${preset}', '${bg}', int(${resVal})
+                        if dim == '2d':
+                            x = y = np.linspace(-3, 3, res)
+                            X, Y = np.meshgrid(x, y)
+                            U, V = np.zeros_like(X), np.zeros_like(Y)
+                            Heat = np.zeros_like(X)
+                            r2 = X**2 + Y**2 + 0.1
+                            
+                            if preset == 'vortex': U, V = -Y / r2, X / r2
+                            elif preset == 'source': U, V = X / r2, Y / r2
+                            elif preset == 'saddle': U, V = X, -Y
+                            elif preset == 'dipole': U, V = (3*X*Y) / (r2**2.5), (2*Y**2 - X**2) / (r2**2.5)
+                                
+                            if bg == 'div': Heat = np.gradient(U, axis=1) + np.gradient(V, axis=0)
+                            elif bg == 'curl': Heat = np.gradient(V, axis=1) - np.gradient(U, axis=0)
+                            return {"dim": "2d", "x": x.tolist(), "y": y.tolist(), "u": U.tolist(), "v": V.tolist(), "heat": Heat.tolist(), "bg": bg}
+                        else:
+                            d = np.linspace(-2, 2, 8)
+                            X, Y, Z = np.meshgrid(d, d, d)
+                            if preset == 'helix': U, V, W = -Y, X, np.ones_like(Z) * 0.5
+                            elif preset == 'wire': r2 = X**2 + Y**2 + 0.1; U, V, W = -Y / r2, X / r2, np.zeros_like(Z)
+                            elif preset == 'grad': U, V, W = X, Y, Z
+                            return {"dim": "3d", "x": X.flatten().tolist(), "y": Y.flatten().tolist(), "z": Z.flatten().tolist(), "u": U.flatten().tolist(), "v": V.flatten().tolist(), "w": W.flatten().tolist()}
+                    json.dumps(do_vec())
+                `;
+                const data = JSON.parse(await pyodide.runPythonAsync(pyCode));
+                
+                if (data.dim === '2d') {
+                    const plotData = [];
+                    if (data.bg !== 'none') plotData.push({ z: data.heat, x: data.x, y: data.y, type: 'heatmap', colorscale: data.bg === 'curl' ? 'RdBu' : 'Viridis', opacity: 0.6, hoverinfo: 'none' });
+                    const ux = [], uy = [];
+                    for(let i=0; i<data.y.length; i++){
+                        for(let j=0; j<data.x.length; j++){
+                            ux.push(data.x[j], data.x[j]+data.u[i][j]*0.2, null);
+                            uy.push(data.y[i], data.y[i]+data.v[i][j]*0.2, null);
+                        }
+                    }
+                    plotData.push({ x: ux, y: uy, mode: 'lines', line: {color: '#1e293b', width: 1.5}, hoverinfo: 'none', showlegend: false });
+                    Plotly.newPlot('vec-plot', plotData, { margin: {t:20, l:20, r:20, b:20}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0.05)', xaxis: {range: [-3, 3]}, yaxis: {range: [-3, 3]} });
+                } else {
+                    Plotly.newPlot('vec-plot', [{ type: 'cone', x: data.x, y: data.y, z: data.z, u: data.u, v: data.v, w: data.w, colorscale: 'Plasma', sizemode: 'absolute', sizeref: 0.5 }], { margin: {t:0, l:0, r:0, b:0}, paper_bgcolor: 'rgba(0,0,0,0)' });
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        window.onload = () => { initPyodide(); };
+    </script>
+</body>
+</html>
